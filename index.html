@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>小朋友的每日任务</title>
+    <style>
+        /* ... (all existing styles remain unchanged) ... */
+        .add-task-fields {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .add-task-fields input[type="text"] {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .add-task-fields input[type="date"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .add-task-fields label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            color: #666;
+        }
+
+        .daily-tasks {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            grid-gap: 20px;
+            height: calc(100vh - 100px);
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-height: calc(100vh - 150px);
+        }
+
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .task-list {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            max-height: calc(100vh - 300px);
+            overflow-y: auto;
+        }
+
+        .task-wheel-container {
+            margin-top: 0;
+            text-align: center;
+            width: 100%;
+        }
+
+        .task-wheel {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .batch-import {
+            margin-top: 10px;
+            padding: 20px;
+            border: 2px dashed #4caf50;
+            border-radius: 8px;
+            width: 90%;
+        }
+
+        .batch-import textarea {
+            width: 100%;
+            height: 80px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        /* 添加语音输入按钮样式 */
+        .voice-input-button {
+            background-color: #4caf50;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.3s;
+        }
+
+        .voice-input-button:hover {
+            background-color: #45a049;
+        }
+
+        .voice-input-button.listening {
+            background-color: #f44336;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        /* 添加语音识别提示框样式 */
+        .voice-recognition-status {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .voice-recognition-status.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* 添加样式 */
+        .nodelay-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .nodelay-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin: 0;
+        }
+
+        .wheel-canvas {
+            transition: transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+            transform-origin: center;
+            will-change: transform;
+            position: relative;
+            z-index: 0;
+        }
+
+        .wheel-pointer {
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #4caf50;
+            z-index: 1;
+        }
+
+        /* 格式化日期显示样式 */
+        .current-date {
+            font-size: 18px;
+            min-width: 200px;
+            text-align: center;
+            padding: 8px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .current-date #currentDate {
+            font-weight: bold;
+            color: #4caf50;
+            margin-bottom: 4px;
+        }
+
+        .current-date .weekday {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* 任务日期样式 */
+        .task-date {
+            font-size: 12px;
+            color: #666;
+            background-color: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+
+        /* 添加拼音和英文注释样式 */
+        .pinyin {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 4px;
+        }
+
+        .english {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 2px;
+            font-style: italic;
+        }
+
+        .task-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .task-label .pinyin {
+            color: #666;
+            font-size: 10px;
+        }
+
+        .task-label .english {
+            color: #888;
+            font-size: 12px;
+        }
+
+        /* 添加任务名称相关样式 */
+        .task-name-container {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+
+        .task-pinyin {
+            font-size: 10px;
+            color: #666;
+        }
+
+        .task-english {
+            font-size: 12px;
+            color: #888;
+            font-style: italic;
+        }
+
+        /* 修改任务项样式 */
+        .task-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 8px;
+            border-left: 4px solid transparent;
+        }
+
+        .task-content {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            flex: 1;
+        }
+
+        /* 优化任务名称容器样式 */
+        .task-name-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            padding: 2px 0;
+        }
+
+        .task-name {
+            font-size: 16px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .task-pinyin {
+            font-size: 10px;
+            color: #666;
+            margin-top: 2px;
+        }
+
+        .task-english {
+            font-size: 12px;
+            color: #888;
+            font-style: italic;
+            margin-top: 1px;
+        }
+
+        /* 任务标签容器 */
+        .task-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        /* 统一标签样式 */
+        .task-tag {
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* 不同类型标签的样式 */
+        .task-date {
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .task-delay-badge {
+            background-color: #fff3e0;
+            color: #f57c00;
+        }
+
+        .nodelay-tag {
+            background-color: #ffebee;
+            color: #d32f2f;
+        }
+
+        /* 修改复选框样式 */
+        .checkbox {
+            min-width: 24px;
+            height: 24px;
+            border: 2px solid #666;
+            border-radius: 4px;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #4caf50;
+            background-color: white;
+        }
+
+        /* iPad 适配样式 */
+        @media (max-width: 1024px) {
+            .daily-tasks {
+                grid-template-columns: 1fr;  /* 在 iPad 上改为单列布局 */
+                height: auto;
+                padding: 10px 20px;
+            }
+
+            .left-panel, .right-panel {
+                max-height: none;
+            }
+
+            .task-list {
+                max-height: 50vh;  /* 限制任务列表高度 */
+            }
+
+            .task-wheel {
+                width: 250px;  /* 稍微缩小轮盘尺寸 */
+                height: 250px;
+            }
+
+            /* 增大触控区域 */
+            .task-item {
+                padding: 15px;
+                margin-bottom: 12px;
+            }
+
+            .checkbox {
+                min-width: 28px;
+                height: 28px;
+            }
+
+            /* 增大按钮尺寸 */
+            button {
+                min-height: 44px;
+                padding: 10px 20px;
+            }
+
+            /* 优化输入框 */
+            input[type="text"],
+            input[type="date"] {
+                font-size: 16px;
+                padding: 10px;
+            }
+        }
+
+        /* 防止 iOS 设备上的默认触摸高亮 */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* 优化 iOS 设备上的滚动行为 */
+        .task-list {
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body>
+    <div class="App">
+        <header class="App-header">
+            <h1>
+                小朋友的每日任务
+                <div class="pinyin">xiǎo péng yǒu de měi rì rèn wù</div>
+                <div class="english">Children's Daily Tasks</div>
+            </h1>
+        </header>
+        <main>
+            <div class="daily-tasks">
+                <div class="left-panel">
+                    <div class="date-nav">
+                        <button onclick="changeDate(-1)">←</button>
+                        <div class="current-date">
+                            <div id="currentDate"></div>
+                            <div id="weekday" class="weekday"></div>
+                        </div>
+                        <button onclick="changeDate(1)">→</button>
+                    </div>
+                    <h2 class="task-label">
+                        今日任务
+                        <span class="pinyin">jīn rì rèn wù</span>
+                        <span class="english">Today's Tasks</span>
+                    </h2>
+                    <div class="task-list" id="taskList">
+                        <!-- 任务列表将通过 JavaScript 动态生成 -->
+                    </div>
+                    <div class="add-task">
+                        <div class="add-task-fields">
+                            <input type="text" id="newTaskInput" placeholder="输入新任务">
+                            <input type="date" id="taskDueDate">
+                            <label class="nodelay-checkbox">
+                                <input type="checkbox" id="noDelay">
+                                不可延期
+                            </label>
+                            <button class="voice-input-button" id="voiceInput" title="语音输入">
+                                🎤
+                            </button>
+                            <button onclick="addTask()">添加任务</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="right-panel">
+                    <div class="task-wheel-container">
+                        <h3>
+                            任务轮盘
+                            <div class="pinyin">rèn wù lún pán</div>
+                            <div class="english">Task Wheel</div>
+                        </h3>
+                        <div class="task-wheel">
+                            <div class="wheel-pointer" style="position: absolute; z-index: 2;"></div>
+                            <canvas id="wheelCanvas" class="wheel-canvas" width="300" height="300"></canvas>
+                        </div>
+                        <button class="spin-button" onclick="spinWheel()" id="spinButton">转动轮盘</button>
+                        <div class="selected-task" id="selectedTask"></div>
+                    </div>
+                    <div class="batch-import">
+                        <h3>
+                            从微信群导入任务
+                            <div class="pinyin">cóng wēi xìn qún dǎo rù rèn wù</div>
+                            <div class="english">Import Tasks from WeChat Group</div>
+                        </h3>
+                        <textarea id="batchInput" placeholder="将微信群消息复制到这里，每行一个任务"></textarea>
+                        <button onclick="importTasks()">导入任务</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 添加语音识别状态提示 -->
+    <div id="voiceStatus" class="voice-recognition-status"></div>
+
+    <script>
+        // 当前选择的日期
+        let currentDate = new Date();
+        let tasks = [];
+
+        // 格式化日期的函数
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}年${month}月${day}日`;
+        }
+
+        // 获取星期几
+        function getWeekday(date) {
+            const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            return weekdays[date.getDay()];
+        }
+
+        // 获取日期的键值
+        function getDateKey(date) {
+            return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+        }
+
+        // 更新日期显示
+        function updateDateDisplay() {
+            document.getElementById('currentDate').textContent = formatDate(currentDate);
+            document.getElementById('weekday').textContent = getWeekday(currentDate);
+        }
+
+        // 切换日期
+        function changeDate(offset) {
+            currentDate.setDate(currentDate.getDate() + offset);
+            updateDateDisplay();
+            loadTasks();
+        }
+
+        // 从本地存储加载指定日期的任务
+        function loadTasks() {
+            const dateKey = getDateKey(currentDate);
+            const storedTasks = localStorage.getItem(`tasks_${dateKey}`);
+            if (storedTasks) {
+                tasks = JSON.parse(storedTasks);
+            } else {
+                // 如果没有存储的任务，使用默认任务
+                tasks = [
+                    { id: 1, name: '整理书包', pinyin: 'zhěng lǐ shū bāo', english: 'Pack schoolbag', completed: false },
+                    { id: 2, name: '完成作业', pinyin: 'wán chéng zuò yè', english: 'Complete homework', completed: false },
+                    { id: 3, name: '收拾玩具', pinyin: 'shōu shi wán jù', english: 'Clean up toys', completed: false },
+                    { id: 4, name: '刷牙洗脸', pinyin: 'shuā yá xǐ liǎn', english: 'Brush teeth and wash face', completed: false }
+                ];
+            }
+            renderTasks();
+            drawWheel();
+        }
+
+        // 定义任务类型和对应的颜色
+        const taskTypes = {
+            study: {
+                keywords: ['作业', '预习', '复习', '背诵'],
+                color: '#4caf50',  // 绿色
+                lightColor: '#81c784',  // 浅绿色
+                pinyin: 'zuò yè',
+                english: 'homework'
+            },
+            organize: {
+                keywords: ['整理', '收拾', '打扫'],
+                color: '#2196f3',  // 蓝色
+                lightColor: '#64b5f6',  // 浅蓝色
+                pinyin: 'zhěng lǐ',
+                english: 'organize'
+            },
+            prepare: {
+                keywords: ['预备', '准备'],
+                color: '#ff9800',  // 橙色
+                lightColor: '#ffb74d'  // 浅橙色
+            },
+            routine: {
+                keywords: ['刷牙', '洗脸', '吃饭', '睡觉'],
+                color: '#9c27b0',  // 紫色
+                lightColor: '#ba68c8'  // 浅紫色
+            }
+        };
+
+        // 获取任务类型
+        function getTaskType(taskName) {
+            for (const [type, config] of Object.entries(taskTypes)) {
+                if (config.keywords.some(keyword => taskName.includes(keyword))) {
+                    return type;
+                }
+            }
+            return 'other';  // 默认类型
+        }
+
+        // 获取任务颜色
+        function getTaskColor(taskName, isLight = false) {
+            const type = getTaskType(taskName);
+            const typeConfig = taskTypes[type] || {
+                color: '#757575',      // 默认灰色
+                lightColor: '#bdbdbd'  // 默认浅灰色
+            };
+            return isLight ? typeConfig.lightColor : typeConfig.color;
+        }
+
+        // 修改添加任务函数
+        function addTask() {
+            const taskName = document.getElementById('newTaskInput').value.trim();
+            const dueDate = document.getElementById('taskDueDate').value;
+            const noDelay = document.getElementById('noDelay').checked;
+
+            if (taskName) {
+                const newTask = {
+                    id: Date.now(),
+                    name: taskName,
+                    pinyin: getPinyin(taskName),  // 获取拼音
+                    english: getEnglish(taskName), // 获取英文翻译
+                    completed: false,
+                    dueDate: dueDate ? formatDateFromInput(dueDate) : null,
+                    originalDate: formatDate(currentDate),
+                    delayed: false,
+                    delayable: !noDelay
+                };
+                tasks.push(newTask);
+                
+                // 清空输入
+                document.getElementById('newTaskInput').value = '';
+                document.getElementById('taskDueDate').value = '';
+                document.getElementById('noDelay').checked = false;
+                
+                renderTasks();
+            }
+        }
+
+        // 根据任务类型获取拼音
+        function getPinyin(taskName) {
+            for (const [type, config] of Object.entries(taskTypes)) {
+                if (config.keywords.some(keyword => taskName.includes(keyword))) {
+                    return config.pinyin || '';
+                }
+            }
+            return '';  // 如果没有匹配的类型，返回空字符串
+        }
+
+        // 根据任务类型获取英文
+        function getEnglish(taskName) {
+            for (const [type, config] of Object.entries(taskTypes)) {
+                if (config.keywords.some(keyword => taskName.includes(keyword))) {
+                    return config.english || '';
+                }
+            }
+            return '';  // 如果没有匹配的类型，返回空字符串
+        }
+
+        // 将输入框的日期格式转换为显示格式
+        function formatDateFromInput(dateString) {
+            const date = new Date(dateString);
+            return formatDate(date);
+        }
+
+        // 修改渲染任务列表函数
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = tasks.map(task => `
+                <div class="task-item ${task.completed ? 'completed' : ''} ${task.delayed ? 'delayed' : ''}"
+                     onclick="toggleTask(${task.id})"
+                     style="background-color: ${task.completed ? '#e8f5e9' : getTaskColor(task.name, true)}">
+                    <span class="checkbox"
+                          style="border-color: ${getTaskColor(task.name)}; color: ${getTaskColor(task.name)}">
+                        ${task.completed ? '✓' : ''}
+                    </span>
+                    <div class="task-content">
+                        <div class="task-name-container">
+                            <span class="task-name">${task.name}</span>
+                            ${task.pinyin ? `<span class="task-pinyin">${task.pinyin}</span>` : ''}
+                            ${task.english ? `<span class="task-english">${task.english}</span>` : ''}
+                        </div>
+                        <div class="task-tags">
+                            ${task.dueDate ? `
+                                <span class="task-tag task-date">
+                                    <i class="far fa-calendar"></i>
+                                    截止: ${task.dueDate}
+                                </span>
+                            ` : ''}
+                            ${task.delayed ? `
+                                <span class="task-tag task-delay-badge">
+                                    <i class="fas fa-clock"></i>
+                                    延期任务
+                                </span>
+                            ` : ''}
+                            ${!task.delayable ? `
+                                <span class="task-tag nodelay-tag">
+                                    <i class="fas fa-ban"></i>
+                                    不可延期
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${!task.completed && canDelayTask(task) ? `
+                        <button class="delay-button" onclick="delayTask(${task.id}, event)">
+                            <i class="fas fa-arrow-right"></i>
+                            延期到明天
+                        </button>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            // 保存到本地存储
+            const dateKey = getDateKey(currentDate);
+            localStorage.setItem(`tasks_${dateKey}`, JSON.stringify(tasks));
+            
+            // 更新轮盘
+            drawWheel();
+        }
+
+        // 切换任务状态
+        function toggleTask(taskId) {
+            tasks = tasks.map(task => 
+                task.id === taskId ? { ...task, completed: !task.completed } : task
+            );
+            renderTasks();
+        }
+
+        // 初始化
+        updateDateDisplay();
+        loadTasks();
+
+        // 轮盘相关变量
+        let isSpinning = false;
+        let currentRotation = 0;
+
+        // 绘制轮盘
+        function drawWheel() {
+            const canvas = document.getElementById('wheelCanvas');
+            const ctx = canvas.getContext('2d');
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = canvas.width / 2 - 10;
+
+            // 获取未完成的任务
+            const uncompletedTasks = tasks.filter(task => !task.completed);
+            if (uncompletedTasks.length === 0) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                document.getElementById('spinButton').disabled = true;
+                return;
+            }
+
+            document.getElementById('spinButton').disabled = false;
+            const sliceAngle = (2 * Math.PI) / uncompletedTasks.length;
+
+            // 绘制扇形
+            uncompletedTasks.forEach((task, index) => {
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                
+                // 根据任务类型使用对应的颜色
+                ctx.fillStyle = getTaskColor(task.name, index % 2 === 1);
+                
+                ctx.arc(centerX, centerY, radius, 
+                    index * sliceAngle, 
+                    (index + 1) * sliceAngle);
+                
+                ctx.lineTo(centerX, centerY);
+                ctx.fill();
+
+                // 绘制文字
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(index * sliceAngle + sliceAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.fillStyle = 'white';
+                ctx.font = '14px Arial';
+                
+                // 截断过长的文字
+                let text = task.name;
+                if (text.length > 8) {
+                    text = text.substring(0, 8) + '...';
+                }
+                
+                ctx.fillText(text, radius - 20, 5);
+                ctx.restore();
+            });
+        }
+
+        // 转动轮盘
+        function spinWheel() {
+            if (isSpinning) return;
+
+            const uncompletedTasks = tasks.filter(task => !task.completed);
+            if (uncompletedTasks.length === 0) return;
+
+            isSpinning = true;
+            document.getElementById('spinButton').disabled = true;
+            document.getElementById('selectedTask').style.display = 'none';
+
+            // 随机旋转5-10圈
+            const extraSpins = 5 + Math.floor(Math.random() * 5);
+            const targetTask = Math.floor(Math.random() * uncompletedTasks.length);
+            const targetAngle = targetTask * (360 / uncompletedTasks.length);
+            const totalRotation = 360 * extraSpins + targetAngle;
+
+            const wheel = document.querySelector('.wheel-canvas');
+            // 重置当前旋转状态
+            wheel.style.transition = 'none';
+            wheel.style.transform = `rotate(${currentRotation}deg)`;
+            // 强制重绘
+            wheel.offsetHeight;
+            // 添加动画过渡并旋转
+            wheel.style.transition = 'transform 3s cubic-bezier(0.17, 0.67, 0.12, 0.99)';
+            wheel.style.transform = `rotate(${totalRotation}deg)`;
+
+            // 动画结束后显示选中的任务
+            setTimeout(() => {
+                isSpinning = false;
+                document.getElementById('spinButton').disabled = false;
+                document.getElementById('selectedTask').textContent = 
+                    `选中的任务是：${uncompletedTasks[targetTask].name}`;
+                document.getElementById('selectedTask').style.display = 'block';
+                currentRotation = totalRotation;
+            }, 3000);
+        }
+
+        // 设置日期输入框的最小值为今天
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('taskDueDate').min = today;
+        });
+
+        // 语音识别相关代码
+        let recognition;
+        
+        // 检查浏览器是否支持语音识别
+        if ('webkitSpeechRecognition' in window) {
+            recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'zh-CN';
+
+            // 显示语音识别状态
+            function showVoiceStatus(message) {
+                const status = document.getElementById('voiceStatus');
+                status.textContent = message;
+                status.classList.add('show');
+                setTimeout(() => {
+                    status.classList.remove('show');
+                }, 2000);
+            }
+
+            recognition.onstart = function() {
+                document.getElementById('voiceInput').classList.add('listening');
+                document.getElementById('voiceInput').title = '正在听...';
+                showVoiceStatus('请说出任务内容...');
+            };
+
+            recognition.onend = function() {
+                document.getElementById('voiceInput').classList.remove('listening');
+                document.getElementById('voiceInput').title = '语音输入';
+            };
+
+            recognition.onresult = function(event) {
+                const result = event.results[0][0].transcript;
+                document.getElementById('newTaskInput').value = result;
+                showVoiceStatus(`识别结果：${result}`);
+            };
+
+            recognition.onerror = function(event) {
+                console.error('语音识别错误:', event.error);
+                document.getElementById('voiceInput').classList.remove('listening');
+                document.getElementById('voiceInput').title = '语音输入';
+                showVoiceStatus('识别失败，请重试');
+            };
+
+            // 添加语音输入按钮事件监听
+            document.getElementById('voiceInput').addEventListener('click', function() {
+                if (recognition) {
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        recognition.stop();
+                    }
+                }
+            });
+        } else {
+            document.getElementById('voiceInput').style.display = 'none';
+            console.log('浏览器不支持语音识别');
+        }
+
+        // 添加延期任务功能
+        function delayTask(taskId, event) {
+            event.stopPropagation(); // 防止触发任务完成状态切换
+            
+            const tomorrow = new Date(currentDate);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = formatDate(tomorrow);
+
+            // 更新当前任务
+            tasks = tasks.map(task => 
+                task.id === taskId ? {
+                    ...task,
+                    dueDate: tomorrowStr,
+                    delayed: true
+                } : task
+            );
+
+            // 将任务添加到明天
+            const tomorrowKey = getDateKey(tomorrow);
+            let tomorrowTasks = JSON.parse(localStorage.getItem(`tasks_${tomorrowKey}`)) || [];
+            const delayedTask = tasks.find(t => t.id === taskId);
+            
+            if (!tomorrowTasks.some(t => t.id === taskId)) {
+                tomorrowTasks.push(delayedTask);
+                localStorage.setItem(`tasks_${tomorrowKey}`, JSON.stringify(tomorrowTasks));
+            }
+
+            renderTasks();
+        }
+
+        // 添加延期任务样式
+        const style = document.createElement('style');
+        style.textContent = `
+            .task-delay-badge {
+                font-size: 12px;
+                background-color: #ff9800;
+                color: white;
+                padding: 2px 6px;
+                border-radius: 4px;
+                margin-left: 8px;
+            }
+
+            .delay-button {
+                padding: 4px 8px;
+                background-color: #ff9800;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                margin-left: 8px;
+            }
+
+            .delay-button:hover {
+                background-color: #f57c00;
+            }
+
+            .delayed {
+                border-left: 4px solid #ff9800;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // 判断任务是否可以延期
+        function canDelayTask(task) {
+            if (!task.delayable) return false;  // 如果设置了不可延期
+            
+            // 如果没有截止日期，只能在当天延期
+            if (!task.dueDate) {
+                return formatDate(currentDate) === task.originalDate;
+            }
+            
+            // 如果有截止日期，在截止日期之前都可以延期
+            const today = new Date(currentDate);
+            const dueDate = new Date(task.dueDate.replace(/年|月/g, '-').replace(/日/, ''));
+            return today <= dueDate;
+        }
+
+        // 添加 Font Awesome 图标支持
+        document.head.insertAdjacentHTML('beforeend', `
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+        `);
+    </script>
+</body>
+</html> 
