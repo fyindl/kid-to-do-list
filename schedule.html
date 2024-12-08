@@ -217,15 +217,45 @@
             link.click();
         }
 
+        // 获取下一个周一的日期
+        function getNextMonday(date) {
+            const day = date.getDay();
+            // 如果今天是周日（0），则加1天到周一
+            // 如果今天是周一到周六（1-6），则减去(day-1)天到本周一
+            const diff = day === 0 ? 1 : (1 - day);
+            const monday = new Date(date);
+            monday.setDate(date.getDate() + diff);
+            return monday;
+        }
+
+        // 根据周几获取具体日期
+        function getDateForDay(monday, dayName) {
+            const dayOffset = {
+                '周一': 0, '周二': 1, '周三': 2, 
+                '周四': 3, '周五': 4, '周六': 5, '周日': 6
+            };
+            
+            const targetDate = new Date(monday);
+            targetDate.setDate(monday.getDate() + dayOffset[dayName]);
+            return targetDate;
+        }
+
         // 生成ICS文件内容
         function generateICSFile() {
             let icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//课程表//CN\n';
+            
+            // 获取当前日期
+            const now = new Date();
+            // 获取本周一的日期
+            const monday = getNextMonday(now);
             
             Object.entries(currentSchedule).forEach(([day, periods]) => {
                 Object.entries(periods).forEach(([period, times]) => {
                     Object.entries(times).forEach(([time, content]) => {
                         if (content === '放学') {
-                            icsContent += generateEventBlock(day, time);
+                            // 传入本周的对应日期
+                            const eventDate = getDateForDay(monday, day);
+                            icsContent += generateEventBlock(day, time, eventDate);
                         }
                     });
                 });
@@ -236,22 +266,27 @@
         }
 
         // 生成单个事件块
-        function generateEventBlock(day, time) {
+        function generateEventBlock(day, time, date) {
             const days = {
                 '周一': 'MO', '周二': 'TU', '周三': 'WE', 
                 '周四': 'TH', '周五': 'FR', '周六': 'SA', '周日': 'SU'
             };
             
+            // 格式化日期为YYYYMMDD格式
+            const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+            // 格式化时间为HHMMSS格式
+            const timeStr = time.replace(':', '') + '00';
+            
             return `BEGIN:VEVENT
 SUMMARY:放学提醒
 RRULE:FREQ=WEEKLY;BYDAY=${days[day]}
-DTSTART:20240101T${time.replace(':', '')}00
+DTSTART:${dateStr}T${timeStr}
 DURATION:PT30M
 DESCRIPTION:该放学了
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:放学提醒
-TRIGGER:-PT15M
+TRIGGER:-PT30M
 END:VALARM
 END:VEVENT\n`;
         }
