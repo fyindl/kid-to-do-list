@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>课程表</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            table-layout: fixed;
+        }
+        .schedule-table th, .schedule-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        .schedule-table th {
+            background-color: #f4f4f4;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .time-slot {
+            background-color: #f9f9f9;
+            font-weight: bold;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            width: 100px;
+            white-space: nowrap;
+        }
+        .input-section {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f4f4f4;
+            border-radius: 5px;
+        }
+        #scheduleInput {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 10px;
+        }
+        .reminder {
+            color: red;
+            font-weight: bold;
+            background-color: #fff3f3;
+        }
+        .schedule-table td {
+            vertical-align: middle;
+            height: 40px;
+            font-size: 13px;
+        }
+        .schedule-table td div {
+            line-height: 1.2;
+            margin: 2px 0;
+        }
+        .table-container {
+            max-height: 80vh;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>课程表</h1>
+    <div class="table-container">
+        <table class="schedule-table" id="scheduleTable">
+            <tr>
+                <th>时间</th>
+                <th>周一</th>
+                <th>周二</th>
+                <th>周三</th>
+                <th>周四</th>
+                <th>周五</th>
+                <th>周六</th>
+                <th>周日</th>
+            </tr>
+        </table>
+    </div>
+
+    <div class="input-section">
+        <h3>更新课程表</h3>
+        <textarea id="scheduleInput" placeholder="请输入JSON格式的课程表数据"></textarea>
+        <button onclick="updateSchedule()">更新课程表</button>
+        <button onclick="exportToCalendar()">导出到日历</button>
+    </div>
+
+    <script>
+        // 默认课程表数据结构
+        const defaultSchedule = {
+            "周一": {
+                "上午": {
+                    "8:00": "升旗仪式",
+                    "8:20": "数学",
+                    "9:20": "语文",
+                    "10:20": "道法"
+                },
+                "中午": {
+                    "12:00": "午休"
+                },
+                "下午": {
+                    "13:00": "科实",
+                    "14:00": "体育",
+                    "15:00": "英语",
+                    "16:00": "科学托管",
+                    "17:35": "放学",
+                    "18:20": "英语课外"
+                }
+            }
+        };
+
+        // 初始化
+        let currentSchedule = localStorage.getItem('schedule') 
+            ? JSON.parse(localStorage.getItem('schedule')) 
+            : defaultSchedule;
+
+        // 生成表格的函数
+        function generateTable() {
+            const table = document.getElementById('scheduleTable');
+            const timeSlots = getAllTimeSlots();
+            
+            // 清空现有表格内容（保留表头）
+            while (table.rows.length > 1) {
+                table.deleteRow(1);
+            }
+
+            // 填充表格
+            timeSlots.forEach(({period, time}) => {
+                const row = table.insertRow();
+                const timeCell = row.insertCell();
+                timeCell.textContent = `${period}${time}`;
+                timeCell.className = 'time-slot';
+
+                // 添加每天的课程
+                for (let day = 1; day <= 7; day++) {
+                    const cell = row.insertCell();
+                    const dayName = getDayName(day);
+                    
+                    // 检查是否有该时间段的课程
+                    if (currentSchedule[dayName] && 
+                        currentSchedule[dayName][period] && 
+                        currentSchedule[dayName][period][time]) {
+                        
+                        const content = currentSchedule[dayName][period][time];
+                        if (content === '放学') {
+                            cell.className = 'reminder';
+                        }
+                        cell.innerHTML = `<div><strong>${content}</strong></div>`;
+                    }
+                }
+            });
+        }
+
+        // 获取所有时间槽
+        function getAllTimeSlots() {
+            const slots = new Set();
+            
+            // 遍历课程表收集所有时间点
+            Object.values(currentSchedule).forEach(daySchedule => {
+                Object.entries(daySchedule).forEach(([period, times]) => {
+                    Object.keys(times).forEach(time => {
+                        slots.add(JSON.stringify({period, time}));
+                    });
+                });
+            });
+
+            // 转换为数组并排序
+            return Array.from(slots)
+                .map(slot => JSON.parse(slot))
+                .sort((a, b) => {
+                    // 首先按时段排序
+                    const periodOrder = {'上午': 0, '中午': 1, '下午': 2};
+                    const periodDiff = periodOrder[a.period] - periodOrder[b.period];
+                    if (periodDiff !== 0) return periodDiff;
+
+                    // 然后按具体时间排序
+                    const [hoursA, minsA] = a.time.split(':').map(Number);
+                    const [hoursB, minsB] = b.time.split(':').map(Number);
+                    return (hoursA * 60 + minsA) - (hoursB * 60 + minsB);
+                });
+        }
+
+        // 获取星期名称
+        function getDayName(day) {
+            const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            return days[day - 1];
+        }
+
+        // 更新课程表
+        function updateSchedule() {
+            try {
+                const input = document.getElementById('scheduleInput').value;
+                const newSchedule = JSON.parse(input);
+                currentSchedule = newSchedule;
+                localStorage.setItem('schedule', JSON.stringify(newSchedule));
+                generateTable();
+                alert('课程表更新成功！');
+            } catch (e) {
+                console.error('更新课程表时出错:', e);
+                alert('数据格式错误，请检查JSON格式是否正确！\n' + e.message);
+            }
+        }
+
+        // 导出到日历
+        function exportToCalendar() {
+            const icsContent = generateICSFile();
+            const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '课程表.ics';
+            link.click();
+        }
+
+        // 生成ICS文件内容
+        function generateICSFile() {
+            let icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//课程表//CN\n';
+            
+            Object.entries(currentSchedule).forEach(([day, periods]) => {
+                Object.entries(periods).forEach(([period, times]) => {
+                    Object.entries(times).forEach(([time, content]) => {
+                        if (content === '放学') {
+                            icsContent += generateEventBlock(day, time);
+                        }
+                    });
+                });
+            });
+
+            icsContent += 'END:VCALENDAR';
+            return icsContent;
+        }
+
+        // 生成单个事件块
+        function generateEventBlock(day, time) {
+            const days = {
+                '周一': 'MO', '周二': 'TU', '周三': 'WE', 
+                '周四': 'TH', '周五': 'FR', '周六': 'SA', '周日': 'SU'
+            };
+            
+            return `BEGIN:VEVENT
+SUMMARY:放学提醒
+RRULE:FREQ=WEEKLY;BYDAY=${days[day]}
+DTSTART:20240101T${time.replace(':', '')}00
+DURATION:PT30M
+DESCRIPTION:该放学了
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:放学提醒
+TRIGGER:-PT15M
+END:VALARM
+END:VEVENT\n`;
+        }
+
+        // 初始化表格
+        generateTable();
+
+        // 显示默认JSON数据到输入框
+        document.getElementById('scheduleInput').value = 
+            JSON.stringify(currentSchedule, null, 2);
+    </script>
+</body>
+</html>
